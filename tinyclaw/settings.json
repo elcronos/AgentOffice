@@ -1,0 +1,49 @@
+{
+  "workspace": {
+    "path": "/tinyclaw-workspace",
+    "name": "AgentOffice"
+  },
+  "models": {
+    "provider": "anthropic",
+    "anthropic": {
+      "model": "claude-sonnet-4-6"
+    }
+  },
+  "agents": {
+    "ceo": {
+      "name": "Alex CEO",
+      "provider": "anthropic",
+      "model": "claude-sonnet-4-6",
+      "working_directory": "/tinyclaw-workspace/ceo",
+      "prompt_file": "/app/prompts/ceo.md"
+    },
+    "developer": {
+      "name": "Sam Dev",
+      "provider": "anthropic",
+      "model": "claude-sonnet-4-6",
+      "working_directory": "/tinyclaw-workspace/developer",
+      "prompt_file": "/app/prompts/developer.md"
+    },
+    "designer": {
+      "name": "Maya Design",
+      "provider": "anthropic",
+      "model": "claude-sonnet-4-6",
+      "working_directory": "/tinyclaw-workspace/designer",
+      "prompt_file": "/app/prompts/designer.md"
+    },
+    "manager": {
+      "name": "Jordan PM",
+      "provider": "anthropic",
+      "model": "claude-sonnet-4-6",
+      "working_directory": "/tinyclaw-workspace/manager",
+      "prompt_file": "/app/prompts/manager.md"
+    }
+  },
+  "teams": {
+    "agentoffice": {
+      "name": "AgentOffice Team",
+      "agents": ["ceo", "developer", "designer", "manager"],
+      "leader_agent": "ceo"
+    }
+  }
+}

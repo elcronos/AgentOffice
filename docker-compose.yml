@@ -1,0 +1,63 @@
+services:
+  tinyclaw:
+    build: ./tinyclaw
+    container_name: agentoffice-tinyclaw
+    ports:
+      - "3777:3777"
+    volumes:
+      - tinyclaw-workspace:/tinyclaw-workspace
+      - ./backend/prompts:/app/prompts:ro
+      - shared-data:/shared
+    environment:
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY:-}
+    networks:
+      - agentoffice
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:3777/api/queue/status"]
+      interval: 15s
+      timeout: 10s
+      retries: 12
+      start_period: 90s
+
+  backend:
+    build: ./backend
+    container_name: agentoffice-backend
+    ports:
+      - "8000:8000"
+    volumes:
+      - shared-data:/shared
+    environment:
+      - TINYCLAW_URL=http://tinyclaw:3777
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY:-}
+    depends_on:
+      tinyclaw:
+        condition: service_healthy
+    networks:
+      - agentoffice
+    restart: unless-stopped
+
+  frontend:
+    build: ./frontend
+    container_name: agentoffice-frontend
+    ports:
+      - "3000:80"
+    depends_on:
+      - backend
+    networks:
+      - agentoffice
+    restart: unless-stopped
+
+volumes:
+  tinyclaw-workspace:
+    name: agentoffice-tinyclaw-workspace
+  shared-data:
+    name: agentoffice-shared-data
+
+networks:
+  agentoffice:
+    driver: bridge

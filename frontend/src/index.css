@@ -1,0 +1,81 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html { height: 100%; }
+  body {
+    font-family: 'Inter', sans-serif;
+    background-color: #0f172a;
+    color: #f1f5f9;
+    height: 100%;
+  }
+  #root { height: 100%; }
+}
+
+/* ── Office floor grid ─────────────────────────────────────────────────────── */
+.floor-tile {
+  background-image:
+    linear-gradient(rgba(99,102,241,0.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(99,102,241,0.04) 1px, transparent 1px);
+  background-size: 32px 32px;
+}
+
+/* ── Desk glow states ──────────────────────────────────────────────────────── */
+@keyframes planning-glow {
+  0%, 100% { box-shadow: 0 0 8px rgba(99, 102, 241, 0.3), 0 0 20px rgba(99, 102, 241, 0.1); }
+  50%       { box-shadow: 0 0 16px rgba(99, 102, 241, 0.6), 0 0 40px rgba(99, 102, 241, 0.2); }
+}
+@keyframes working-glow {
+  0%, 100% { box-shadow: 0 0 8px rgba(34, 197, 94, 0.3), 0 0 20px rgba(34, 197, 94, 0.1); }
+  50%       { box-shadow: 0 0 16px rgba(34, 197, 94, 0.6), 0 0 40px rgba(34, 197, 94, 0.2); }
+}
+
+.desk-glow-planning { animation: planning-glow 1.5s ease-in-out infinite; }
+.desk-glow-working  { animation: working-glow  1.0s ease-in-out infinite; }
+
+/* ── Avatar animations ─────────────────────────────────────────────────────── */
+@keyframes idle-breathe {
+  0%, 100% { transform: translateY(0); }
+  50%       { transform: translateY(-2px); }
+}
+@keyframes think-bob {
+  0%, 100% { transform: translateY(0) rotate(-3deg); }
+  50%       { transform: translateY(-5px) rotate(3deg); }
+}
+@keyframes work-type {
+  0%, 100% { transform: translateY(0) scale(1); }
+  50%       { transform: translateY(-1px) scale(1.03); }
+}
+
+.avatar-idle     { animation: idle-breathe 3s ease-in-out infinite; }
+.avatar-planning { animation: think-bob    1.2s ease-in-out infinite; }
+.avatar-working  { animation: work-type    0.4s ease-in-out infinite; }
+
+/* ── Typing dots ───────────────────────────────────────────────────────────── */
+.typing-dot { animation: typing-bounce 1.4s infinite ease-in-out; }
+.typing-dot:nth-child(2) { animation-delay: 0.2s; }
+.typing-dot:nth-child(3) { animation-delay: 0.4s; }
+
+@keyframes typing-bounce {
+  0%, 60%, 100% { transform: translateY(0); opacity: 0.4; }
+  30%           { transform: translateY(-7px); opacity: 1; }
+}
+
+/* ── Scrollbar ─────────────────────────────────────────────────────────────── */
+::-webkit-scrollbar       { width: 4px; height: 4px; }
+::-webkit-scrollbar-track { background: #1e293b; }
+::-webkit-scrollbar-thumb { background: #475569; border-radius: 2px; }
+::-webkit-scrollbar-thumb:hover { background: #64748b; }
+
+/* ── Code blocks in chat ───────────────────────────────────────────────────── */
+.chat-code {
+  @apply bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-xs font-mono text-green-300 overflow-x-auto;
+}
+
+/* ── Marquee/screen text ───────────────────────────────────────────────────── */
+@keyframes marquee {
+  0%   { transform: translateX(100%); }
+  100% { transform: translateX(-100%); }
+}
+.marquee-text { animation: marquee 8s linear infinite; }
