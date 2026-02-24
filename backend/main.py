@@ -216,8 +216,8 @@ async def send_to_agent(agent_id: str, message: str, sender: str = "User") -> st
         return await mock_response(agent_id, message)
 
     # Poll for the response
-    deadline = time.time() + 120
-    poll_interval = 1.5
+    deadline = time.time() + 300
+    poll_interval = 1.0
     while time.time() < deadline:
         await asyncio.sleep(poll_interval)
         try:

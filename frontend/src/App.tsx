@@ -199,7 +199,7 @@ export default function App() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-950 flex flex-col" style={{ fontFamily: 'Inter, sans-serif' }}>
+    <div className="h-screen overflow-hidden bg-slate-950 flex flex-col" style={{ fontFamily: 'Inter, sans-serif' }}>
 
       {/* ── Top bar ──────────────────────────────────────────────────────── */}
       <header className="flex items-center justify-between px-5 py-2.5 bg-slate-900 border-b border-slate-800 flex-shrink-0">
@@ -293,10 +293,7 @@ export default function App() {
       </div>
 
       {/* ── Main layout ──────────────────────────────────────────────────── */}
-      <main
-        className="flex-1 flex overflow-hidden"
-        style={{ height: 'calc(100vh - 53px)' }}
-      >
+      <main className="flex-1 flex overflow-hidden min-h-0">
         {/* Left: 2D Office */}
         <div className="flex-1 p-3 min-w-0 overflow-hidden">
           <OfficeGame
@@ -310,7 +307,7 @@ export default function App() {
         </div>
 
         {/* Right: Tabbed sidebar */}
-        <div className="w-80 xl:w-96 flex-shrink-0 flex flex-col p-3 pl-0 gap-0">
+        <div className="w-[420px] xl:w-[480px] flex-shrink-0 flex flex-col p-3 pl-0 gap-0">
           {/* Tab bar */}
           <div className="flex bg-slate-900 border border-slate-700 rounded-t-xl overflow-hidden">
             {SIDE_TABS.map(tab => (
