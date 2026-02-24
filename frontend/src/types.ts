@@ -14,7 +14,7 @@ export interface Agent {
 
 export interface ChatMessage {
   id: string
-  type: 'user' | 'agent'
+  type: 'user' | 'agent' | 'system'
   agent_id: string
   user: string
   text: string
@@ -26,6 +26,7 @@ export interface Config {
   provider: string
   configured: boolean
   api_key_preview?: string
+  github_token_preview?: string
 }
 
 export interface Notification {

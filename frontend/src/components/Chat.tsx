@@ -142,6 +142,16 @@ function AgentPicker({
   )
 }
 
+function SystemMessage({ msg }: { msg: ChatMessage }) {
+  return (
+    <div className="flex items-center gap-2 my-2 px-2">
+      <div className="flex-1 h-px bg-slate-700/60" />
+      <span className="text-xs text-slate-500 italic whitespace-nowrap">— {msg.text} —</span>
+      <div className="flex-1 h-px bg-slate-700/60" />
+    </div>
+  )
+}
+
 function MessageBubble({ msg, agents, compact }: { msg: ChatMessage; agents: Agent[]; compact?: boolean }) {
   const isUser = msg.type === 'user'
   const agent = agents.find(a => a.id === msg.agent_id)
@@ -238,7 +248,7 @@ export default function Chat({
 
   const visibleMessages = targetAgent === 'general'
     ? messages
-    : messages.filter(m => m.agent_id === targetAgent)
+    : messages.filter(m => m.type === 'system' || m.agent_id === targetAgent)
 
   const activeAgent = agents.find(a => a.id === targetAgent)
   const isBusy = activeAgent && activeAgent.status !== 'IDLE'
@@ -300,6 +310,7 @@ export default function Chat({
           )}
 
           {visibleMessages.map((msg, i) => {
+            if (msg.type === 'system') return <SystemMessage key={msg.id} msg={msg} />
             const prev = visibleMessages[i - 1]
             const compact = !!prev && prev.type === msg.type && prev.agent_id === msg.agent_id
             return <MessageBubble key={msg.id} msg={msg} agents={agents} compact={compact} />

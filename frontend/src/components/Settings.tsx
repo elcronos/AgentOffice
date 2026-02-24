@@ -1,6 +1,8 @@
 import { useState } from 'react'
 import { Config } from '../types'
-import { X, Key, Bot, CheckCircle, AlertCircle, ExternalLink } from 'lucide-react'
+import { X, Key, Bot, CheckCircle, AlertCircle, ExternalLink, Github } from 'lucide-react'
+
+const API_BASE = import.meta.env.DEV ? 'http://localhost:8000' : ''
 
 interface SettingsProps {
   config: Config
@@ -57,6 +59,12 @@ export default function Settings({ config, onClose, onSave }: SettingsProps) {
   const [error, setError] = useState<string | null>(null)
   const [showKey, setShowKey] = useState(false)
 
+  const [githubToken, setGithubToken] = useState('')
+  const [showGithubToken, setShowGithubToken] = useState(false)
+  const [githubSaving, setGithubSaving] = useState(false)
+  const [githubSaved, setGithubSaved] = useState(false)
+  const [githubError, setGithubError] = useState<string | null>(null)
+
   const selectedProvider = PROVIDERS.find(p => p.id === provider) || PROVIDERS[0]
 
   async function handleSave() {
@@ -77,11 +85,35 @@ export default function Settings({ config, onClose, onSave }: SettingsProps) {
     }
   }
 
+  async function saveGithubToken() {
+    if (!githubToken.trim()) {
+      setGithubError('GitHub token is required')
+      return
+    }
+    setGithubSaving(true)
+    setGithubError(null)
+    try {
+      const res = await fetch(`${API_BASE}/api/config/github-token`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ github_token: githubToken.trim() }),
+      })
+      if (!res.ok) throw new Error('Request failed')
+      setGithubSaved(true)
+      setGithubToken('')
+      setTimeout(() => setGithubSaved(false), 2000)
+    } catch (e) {
+      setGithubError('Failed to save GitHub token')
+    } finally {
+      setGithubSaving(false)
+    }
+  }
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
-      <div className="bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl w-full max-w-lg">
+      <div className="bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] flex flex-col">
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-700">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-700 flex-shrink-0">
           <div className="flex items-center gap-2">
             <Key className="w-5 h-5 text-indigo-400" />
             <h2 className="text-lg font-semibold text-white">Agent Settings</h2>
@@ -94,7 +126,7 @@ export default function Settings({ config, onClose, onSave }: SettingsProps) {
           </button>
         </div>
 
-        <div className="p-6 space-y-5">
+        <div className="p-6 space-y-5 overflow-y-auto flex-1 min-h-0">
           {/* Current status */}
           <div
             className={`flex items-center gap-3 p-3 rounded-lg border ${
@@ -193,6 +225,62 @@ export default function Settings({ config, onClose, onSave }: SettingsProps) {
             </p>
           </div>
 
+          {/* GitHub Token */}
+          <div>
+            <div className="flex items-center gap-2 mb-2">
+              <Github className="w-4 h-4 text-slate-400" />
+              <label className="text-sm font-medium text-slate-300">GitHub Token</label>
+              {config.github_token_preview && (
+                <span className="ml-auto flex items-center gap-1 text-xs text-green-400">
+                  <CheckCircle className="w-3 h-3" />
+                  {config.github_token_preview}
+                </span>
+              )}
+            </div>
+            <div className="relative mb-1">
+              <input
+                type={showGithubToken ? 'text' : 'password'}
+                value={githubToken}
+                onChange={e => setGithubToken(e.target.value)}
+                placeholder="ghp_xxxx…"
+                className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2.5 text-sm text-slate-200 placeholder-slate-600 focus:outline-none focus:border-indigo-500 pr-20"
+              />
+              <button
+                type="button"
+                onClick={() => setShowGithubToken(s => !s)}
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-slate-500 hover:text-slate-300 px-2 py-1 bg-slate-700 rounded"
+              >
+                {showGithubToken ? 'Hide' : 'Show'}
+              </button>
+            </div>
+            <p className="text-xs text-slate-600 mb-2">
+              Lets Sam push code to GitHub without manual auth (ghp_… token).
+            </p>
+            {githubError && (
+              <div className="text-sm text-red-400 bg-red-900/20 border border-red-800/50 rounded-lg px-3 py-2 mb-2">
+                {githubError}
+              </div>
+            )}
+            <button
+              onClick={saveGithubToken}
+              disabled={githubSaving || !githubToken.trim()}
+              className={`w-full rounded-lg py-2 text-sm font-medium transition-all ${
+                githubSaved
+                  ? 'bg-green-600 text-white'
+                  : 'bg-slate-700 hover:bg-slate-600 disabled:bg-slate-800 disabled:cursor-not-allowed text-slate-300'
+              }`}
+            >
+              {githubSaving ? 'Saving…' : githubSaved ? '✓ GitHub Token Saved!' : 'Save GitHub Token'}
+            </button>
+          </div>
+
+          {/* Error */}
+          {error && (
+            <div className="text-sm text-red-400 bg-red-900/20 border border-red-800/50 rounded-lg px-3 py-2">
+              {error}
+            </div>
+          )}
+
           {/* tinyclaw info */}
           <div className="bg-slate-800/50 border border-slate-700 rounded-lg p-3">
             <div className="flex items-center gap-2 mb-1">
@@ -205,17 +293,10 @@ export default function Settings({ config, onClose, onSave }: SettingsProps) {
               stored on disk.
             </p>
           </div>
-
-          {/* Error */}
-          {error && (
-            <div className="text-sm text-red-400 bg-red-900/20 border border-red-800/50 rounded-lg px-3 py-2">
-              {error}
-            </div>
-          )}
         </div>
 
         {/* Footer */}
-        <div className="flex gap-3 px-6 py-4 border-t border-slate-700">
+        <div className="flex gap-3 px-6 py-4 border-t border-slate-700 flex-shrink-0">
           <button
             onClick={onClose}
             className="flex-1 bg-slate-700 hover:bg-slate-600 text-slate-300 rounded-lg py-2 text-sm font-medium transition-colors"

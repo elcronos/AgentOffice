@@ -4,6 +4,7 @@ AgentOffice Backend — FastAPI server bridging tinyclaw agents with the UI.
 import asyncio
 import json
 import os
+import re
 import time
 from datetime import datetime
 from pathlib import Path
@@ -119,6 +120,7 @@ settings: dict = {
     "model": "claude-sonnet-4-6",
     "provider": "anthropic",
     "configured": bool(_initial_key),
+    "github_token": os.environ.get("GITHUB_TOKEN", ""),
 }
 
 connections: list[WebSocket] = []
@@ -159,6 +161,119 @@ async def notify(title: str, body: str = "", kind: str = "info", agent_id: str |
         "agent_id": agent_id,
         "timestamp": datetime.utcnow().isoformat(),
     })
+
+
+async def broadcast_system_message(text: str, agent_id: str | None = None):
+    msg = {
+        "id": f"sys_{time.time_ns()}",
+        "type": "system",
+        "agent_id": agent_id or "",
+        "user": "System",
+        "text": text,
+        "timestamp": datetime.utcnow().isoformat(),
+    }
+    chat_history.append(msg)
+    await broadcast({"type": "message", **msg})
+
+
+DELEGATABLE_AGENTS = {"developer", "designer", "manager"}
+
+
+def parse_delegations(text: str) -> dict[str, str]:
+    pattern = re.compile(
+        r"^\s*@\*{0,2}(" + "|".join(DELEGATABLE_AGENTS) + r")\*{0,2}\s*:\s*(.+)$",
+        re.MULTILINE | re.IGNORECASE,
+    )
+    return {m.group(1).lower(): m.group(2).strip() for m in pattern.finditer(text)}
+
+
+async def handle_delegated_tasks(ceo_response: str, delegations: dict[str, str], original_message: str, user: str):
+    """Fan out CEO delegations to specialist agents in parallel, then have CEO summarize."""
+    specialist_results: dict[str, str] = {}
+
+    async def run_specialist(agent_id: str, task: str):
+        agent = AGENTS[agent_id]
+        await broadcast_system_message(f"Delegating to {agent['name']}…", agent_id)
+        await set_status(agent_id, "PLANNING", "Task from CEO…")
+        await asyncio.sleep(0.3)
+        await set_status(agent_id, "WORKING", "Working on task…")
+
+        try:
+            response = await send_to_agent(agent_id, task, sender="Alex CEO")
+        except Exception as e:
+            response = f"Sorry, I hit an error: {e}"
+
+        agent_msg = {
+            "id": f"msg_{time.time_ns()}",
+            "type": "agent",
+            "agent_id": agent_id,
+            "user": agent["name"],
+            "text": response,
+            "timestamp": datetime.utcnow().isoformat(),
+        }
+        chat_history.append(agent_msg)
+        await broadcast({"type": "message", **agent_msg})
+        await set_status(agent_id, "IDLE", "")
+
+        preview = response[:100] + ("…" if len(response) > 100 else "")
+        await notify(
+            f"{agent['emoji']} {agent['name']} responded",
+            preview,
+            kind="info",
+            agent_id=agent_id,
+        )
+        specialist_results[agent_id] = response
+
+    tasks = [
+        run_specialist(agent_id, task)
+        for agent_id, task in delegations.items()
+        if agent_id in AGENTS
+    ]
+    await asyncio.gather(*tasks)
+
+    if specialist_results:
+        summary_parts = []
+        for agent_id, response in specialist_results.items():
+            agent = AGENTS[agent_id]
+            summary_parts.append(
+                f"**{agent['name']}:** {response[:200]}{'…' if len(response) > 200 else ''}"
+            )
+
+        summary_prompt = (
+            f"The team responded to: {original_message}\n\n"
+            + "\n\n".join(summary_parts)
+            + "\n\nProvide a brief executive summary of what was decided and what the next step is."
+        )
+
+        await broadcast_system_message("CEO is reviewing team responses…", "ceo")
+        await set_status("ceo", "PLANNING", "Reviewing team responses…")
+        await asyncio.sleep(0.3)
+        await set_status("ceo", "WORKING", "Writing summary…")
+
+        try:
+            summary = await send_to_agent("ceo", summary_prompt, sender="System")
+        except Exception as e:
+            summary = f"Error generating summary: {e}"
+
+        ceo_msg = {
+            "id": f"msg_{time.time_ns()}",
+            "type": "agent",
+            "agent_id": "ceo",
+            "user": AGENTS["ceo"]["name"],
+            "text": summary,
+            "timestamp": datetime.utcnow().isoformat(),
+        }
+        chat_history.append(ceo_msg)
+        await broadcast({"type": "message", **ceo_msg})
+        await set_status("ceo", "IDLE", "")
+
+        preview = summary[:100] + ("…" if len(summary) > 100 else "")
+        await notify(
+            f"👔 {AGENTS['ceo']['name']} — Executive Summary",
+            preview,
+            kind="success",
+            agent_id="ceo",
+        )
 
 
 # ─── tinyclaw helpers ─────────────────────────────────────────────────────────
@@ -262,6 +377,7 @@ async def handle_chat(agent_id: str, message: str, user: str = "User"):
     }
     chat_history.append(user_msg)
     await broadcast({"type": "message", **user_msg})
+    await broadcast_system_message(f"{AGENTS[agent_id]['name']} is reviewing your request…", agent_id)
 
     await set_status(agent_id, "PLANNING", f"Reading: {message[:30]}…")
     await asyncio.sleep(0.3)
@@ -282,6 +398,15 @@ async def handle_chat(agent_id: str, message: str, user: str = "User"):
     }
     chat_history.append(agent_msg)
     await broadcast({"type": "message", **agent_msg})
+
+    # CEO routing: check for delegations after CEO responds
+    if agent_id == "ceo":
+        delegations = parse_delegations(response)
+        if delegations:
+            await set_status("ceo", "IDLE", "")
+            await handle_delegated_tasks(response, delegations, message, user)
+            return  # delegation path handles IDLE + notification
+
     await set_status(agent_id, "IDLE", "")
 
     preview = response[:100] + ("…" if len(response) > 100 else "")
@@ -356,11 +481,13 @@ async def get_agents():
 
 @app.get("/api/config")
 async def get_config():
+    gh = settings.get("github_token", "")
     return {
         "model": settings["model"],
         "provider": settings["provider"],
         "configured": settings["configured"],
         "api_key_preview": f"{settings['api_key'][:8]}…" if len(settings["api_key"]) > 8 else "",
+        "github_token_preview": f"{gh[:4]}…{gh[-4:]}" if len(gh) > 8 else ("set" if gh else ""),
     }
 
 
@@ -387,7 +514,11 @@ async def update_config(body: ConfigUpdate):
             "openai":     "OPENAI_API_KEY",
             "openrouter": "OPENROUTER_API_KEY",
         }.get(provider, "ANTHROPIC_API_KEY")
-        (SHARED_DIR / "api.env").write_text(f"export {var}={body.api_key}\n")
+        env_content = f"export {var}={body.api_key}\n"
+        gh = settings.get("github_token", "")
+        if gh:
+            env_content += f"export GITHUB_TOKEN={gh}\n"
+        (SHARED_DIR / "api.env").write_text(env_content)
         (SHARED_DIR / ".restart").touch()
 
         # Strip provider prefix from model if present (tinyclaw uses bare model names)
@@ -396,6 +527,29 @@ async def update_config(body: ConfigUpdate):
 
     await broadcast({"type": "config_updated", "configured": settings["configured"]})
     return {"success": True, "configured": settings["configured"]}
+
+
+class GithubTokenUpdate(BaseModel):
+    github_token: str
+
+
+@app.post("/api/config/github-token")
+async def update_github_token(body: GithubTokenUpdate):
+    settings["github_token"] = body.github_token
+    if body.github_token:
+        SHARED_DIR.mkdir(exist_ok=True)
+        var = {
+            "anthropic": "ANTHROPIC_API_KEY",
+            "openai": "OPENAI_API_KEY",
+            "openrouter": "OPENROUTER_API_KEY",
+        }.get(settings["provider"], "ANTHROPIC_API_KEY")
+        env_lines = []
+        if settings["api_key"]:
+            env_lines.append(f"export {var}={settings['api_key']}\n")
+        env_lines.append(f"export GITHUB_TOKEN={body.github_token}\n")
+        (SHARED_DIR / "api.env").write_text("".join(env_lines))
+        (SHARED_DIR / ".restart").touch()
+    return {"success": True}
 
 
 @app.get("/api/chat/history")
@@ -581,7 +735,6 @@ async def install_github_skill(agent_id: str, body: InstallGithubBody):
     if agent_id not in AGENTS:
         return JSONResponse(status_code=404, content={"error": "Agent not found"})
     # Parse owner/repo from URL
-    import re
     m = re.match(r"https?://github\.com/([^/]+/[^/]+?)(?:\.git)?(?:/.*)?$", body.repo_url)
     if not m:
         return JSONResponse(status_code=400, content={"error": "Invalid GitHub URL"})
