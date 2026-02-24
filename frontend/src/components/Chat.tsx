@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
+import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
 import { Agent, ChatMessage } from '../types'
-import { Send, Users, ChevronDown, Trash2 } from 'lucide-react'
+import { Send, Users, ChevronDown, Trash2, ArrowDown } from 'lucide-react'
 
 interface ChatProps {
   agents: Agent[]
@@ -22,29 +24,43 @@ function formatTime(ts: string) {
   }
 }
 
-/** Very simple markdown → JSX: handles ``` code blocks and **bold** */
-function FormattedText({ text }: { text: string }) {
-  const parts: React.ReactNode[] = []
-  const codeBlockRegex = /```[\w]*\n?([\s\S]*?)```/g
-  let lastIndex = 0
-  let match: RegExpExecArray | null
-
-  while ((match = codeBlockRegex.exec(text)) !== null) {
-    if (match.index > lastIndex) {
-      parts.push(<span key={lastIndex}>{text.slice(lastIndex, match.index)}</span>)
-    }
-    parts.push(
-      <pre key={match.index} className="chat-code my-1 block">
-        {match[1].trim()}
-      </pre>
-    )
-    lastIndex = match.index + match[0].length
-  }
-  if (lastIndex < text.length) {
-    parts.push(<span key={lastIndex}>{text.slice(lastIndex)}</span>)
-  }
-
-  return <>{parts.length ? parts : text}</>
+function AgentMarkdown({ text }: { text: string }) {
+  return (
+    <ReactMarkdown
+      remarkPlugins={[remarkGfm]}
+      components={{
+        p: ({ children }) => <p className="mb-2 last:mb-0 leading-relaxed">{children}</p>,
+        strong: ({ children }) => <strong className="font-semibold text-white">{children}</strong>,
+        em: ({ children }) => <em className="italic text-slate-300">{children}</em>,
+        h1: ({ children }) => <h1 className="text-base font-bold text-white mt-3 mb-1">{children}</h1>,
+        h2: ({ children }) => <h2 className="text-sm font-bold text-white mt-2 mb-1">{children}</h2>,
+        h3: ({ children }) => <h3 className="text-sm font-semibold text-slate-200 mt-2 mb-0.5">{children}</h3>,
+        ul: ({ children }) => <ul className="my-1.5 ml-4 space-y-0.5 list-disc marker:text-slate-400">{children}</ul>,
+        ol: ({ children }) => <ol className="my-1.5 ml-4 space-y-0.5 list-decimal marker:text-slate-400">{children}</ol>,
+        li: ({ children }) => <li className="text-slate-100 leading-snug">{children}</li>,
+        code: ({ children, className }) => {
+          const isBlock = className?.includes('language-')
+          return isBlock ? (
+            <pre className="chat-code my-2 block overflow-x-auto">
+              <code>{children}</code>
+            </pre>
+          ) : (
+            <code className="bg-slate-900 border border-slate-700 rounded px-1 py-0.5 text-xs font-mono text-green-300">{children}</code>
+          )
+        },
+        pre: ({ children }) => <>{children}</>,
+        blockquote: ({ children }) => (
+          <blockquote className="border-l-2 border-slate-500 pl-3 my-2 text-slate-400 italic">{children}</blockquote>
+        ),
+        a: ({ href, children }) => (
+          <a href={href} target="_blank" rel="noreferrer" className="text-indigo-400 hover:text-indigo-300 underline">{children}</a>
+        ),
+        hr: () => <hr className="border-slate-600 my-2" />,
+      }}
+    >
+      {text}
+    </ReactMarkdown>
+  )
 }
 
 function AgentPicker({
@@ -126,29 +142,30 @@ function AgentPicker({
   )
 }
 
-function MessageBubble({ msg, agents }: { msg: ChatMessage; agents: Agent[] }) {
+function MessageBubble({ msg, agents, compact }: { msg: ChatMessage; agents: Agent[]; compact?: boolean }) {
   const isUser = msg.type === 'user'
   const agent = agents.find(a => a.id === msg.agent_id)
 
   return (
-    <div className={`flex gap-2 mb-3 ${isUser ? 'flex-row-reverse' : 'flex-row'}`}>
-      {/* Avatar */}
-      <div
-        className="flex-shrink-0 w-7 h-7 rounded-full flex items-center justify-center text-sm"
-        style={{
-          backgroundColor: isUser ? '#4338ca' : `${agent?.color || '#475569'}25`,
-        }}
-      >
-        {isUser ? '👤' : (agent?.emoji || '🤖')}
+    <div className={`flex gap-2 ${compact ? 'mb-1' : 'mb-3'} ${isUser ? 'flex-row-reverse' : 'flex-row'}`}>
+      {/* Avatar — hidden in compact mode (consecutive from same sender) */}
+      <div className={`flex-shrink-0 w-7 h-7 ${compact ? 'opacity-0' : ''}`}>
+        <div
+          className="w-7 h-7 rounded-full flex items-center justify-center text-sm"
+          style={{ backgroundColor: isUser ? '#4338ca' : `${agent?.color || '#475569'}25` }}
+        >
+          {isUser ? '👤' : (agent?.emoji || '🤖')}
+        </div>
       </div>
 
       <div className={`flex flex-col ${isUser ? 'items-end' : 'items-start'} max-w-[80%]`}>
-        <div className={`text-xs text-slate-600 mb-0.5 flex items-center gap-1 ${isUser ? 'flex-row-reverse' : ''}`}>
-          <span>{isUser ? 'You' : agent?.name}</span>
-          <span>·</span>
-          <span>{formatTime(msg.timestamp)}</span>
-        </div>
-
+        {!compact && (
+          <div className={`text-xs text-slate-500 mb-0.5 flex items-center gap-1 ${isUser ? 'flex-row-reverse' : ''}`}>
+            <span>{isUser ? 'You' : agent?.name}</span>
+            <span>·</span>
+            <span>{formatTime(msg.timestamp)}</span>
+          </div>
+        )}
         <div
           className={`px-3 py-2 rounded-2xl text-sm leading-relaxed whitespace-pre-wrap break-words ${
             isUser
@@ -156,8 +173,11 @@ function MessageBubble({ msg, agents }: { msg: ChatMessage; agents: Agent[] }) {
               : 'bg-slate-700/80 text-slate-100 rounded-bl-sm'
           }`}
         >
-          {isUser ? msg.text : <FormattedText text={msg.text} />}
+          {isUser ? msg.text : <AgentMarkdown text={msg.text} />}
         </div>
+        {compact && (
+          <div className="text-[10px] text-slate-600 mt-0.5 px-1">{formatTime(msg.timestamp)}</div>
+        )}
       </div>
     </div>
   )
@@ -190,19 +210,35 @@ export default function Chat({
 }: ChatProps) {
   const [input, setInput] = useState('')
   const [targetAgent, setTargetAgent] = useState(selectedAgent || 'ceo')
+  const [atBottom, setAtBottom] = useState(true)
+  const scrollRef = useRef<HTMLDivElement>(null)
   const endRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     if (selectedAgent) setTargetAgent(selectedAgent)
   }, [selectedAgent])
 
+  // Auto-scroll only when already pinned to bottom
   useEffect(() => {
+    if (atBottom) {
+      endRef.current?.scrollIntoView({ behavior: 'smooth' })
+    }
+  }, [messages, atBottom])
+
+  function handleScroll() {
+    const el = scrollRef.current
+    if (!el) return
+    setAtBottom(el.scrollHeight - el.scrollTop - el.clientHeight < 60)
+  }
+
+  function scrollToBottom() {
     endRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [messages])
+    setAtBottom(true)
+  }
 
   const visibleMessages = targetAgent === 'general'
     ? messages
-    : messages.filter(m => m.agent_id === targetAgent || m.type === 'user' && m.agent_id === targetAgent)
+    : messages.filter(m => m.agent_id === targetAgent)
 
   const activeAgent = agents.find(a => a.id === targetAgent)
   const isBusy = activeAgent && activeAgent.status !== 'IDLE'
@@ -218,6 +254,8 @@ export default function Chat({
     onSendMessage(agentId, text)
     onSelectAgent(agentId)
     setInput('')
+    // Pin to bottom when user sends a message
+    setAtBottom(true)
   }
 
   async function clearHistory() {
@@ -226,8 +264,9 @@ export default function Chat({
 
   return (
     <div className="flex flex-col h-full bg-slate-900 overflow-hidden">
+
       {/* Agent picker header */}
-      <div className="px-3 pt-3 pb-2 border-b border-slate-700">
+      <div className="px-3 pt-3 pb-2 border-b border-slate-700 flex-shrink-0">
         <AgentPicker
           agents={agents}
           selected={targetAgent}
@@ -235,42 +274,59 @@ export default function Chat({
         />
       </div>
 
-      {/* Messages */}
-      <div className="flex-1 overflow-y-auto px-3 py-3">
-        {!configured && (
-          <div className="text-center py-12">
-            <div className="text-3xl mb-3">🔑</div>
-            <div className="text-sm text-slate-400 font-medium">Not configured</div>
-            <div className="text-xs text-slate-600 mt-1">Click "Configure AI" above to add your API key</div>
-          </div>
-        )}
-
-        {configured && visibleMessages.length === 0 && (
-          <div className="text-center py-12">
-            <div className="text-3xl mb-2">{activeAgent?.emoji || '💬'}</div>
-            <div className="text-sm text-slate-400 font-medium">
-              {targetAgent === 'general' ? 'General Chat' : activeAgent?.name}
+      {/* Messages — scrollable, fixed height */}
+      <div className="relative flex-1 min-h-0">
+        <div
+          ref={scrollRef}
+          onScroll={handleScroll}
+          className="h-full overflow-y-auto px-3 py-3"
+        >
+          {!configured && (
+            <div className="text-center py-12">
+              <div className="text-3xl mb-3">🔑</div>
+              <div className="text-sm text-slate-400 font-medium">Not configured</div>
+              <div className="text-xs text-slate-600 mt-1">Click "Configure AI" above to add your API key</div>
             </div>
-            <div className="text-xs text-slate-600 mt-1">
-              Start a conversation…
+          )}
+
+          {configured && visibleMessages.length === 0 && (
+            <div className="text-center py-12">
+              <div className="text-3xl mb-2">{activeAgent?.emoji || '💬'}</div>
+              <div className="text-sm text-slate-400 font-medium">
+                {targetAgent === 'general' ? 'General Chat' : activeAgent?.name}
+              </div>
+              <div className="text-xs text-slate-600 mt-1">Start a conversation…</div>
             </div>
-          </div>
+          )}
+
+          {visibleMessages.map((msg, i) => {
+            const prev = visibleMessages[i - 1]
+            const compact = !!prev && prev.type === msg.type && prev.agent_id === msg.agent_id
+            return <MessageBubble key={msg.id} msg={msg} agents={agents} compact={compact} />
+          })}
+
+          {activeAgent && ['PLANNING', 'WORKING'].includes(activeAgent.status) && (
+            <TypingIndicator agent={activeAgent} />
+          )}
+
+          <div ref={endRef} />
+        </div>
+
+        {/* Scroll-to-bottom button */}
+        {!atBottom && (
+          <button
+            onClick={scrollToBottom}
+            className="absolute bottom-3 left-1/2 -translate-x-1/2 flex items-center gap-1.5 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-medium px-3 py-1.5 rounded-full shadow-lg transition-all animate-fade-in z-10"
+          >
+            <ArrowDown className="w-3 h-3" />
+            Latest
+          </button>
         )}
-
-        {visibleMessages.map(msg => (
-          <MessageBubble key={msg.id} msg={msg} agents={agents} />
-        ))}
-
-        {activeAgent && ['PLANNING', 'WORKING'].includes(activeAgent.status) && (
-          <TypingIndicator agent={activeAgent} />
-        )}
-
-        <div ref={endRef} />
       </div>
 
       {/* Busy bar */}
       {isBusy && activeAgent && (
-        <div className="px-3 py-1.5 bg-slate-800/60 text-xs text-slate-500 flex items-center gap-1.5 border-t border-slate-700/50">
+        <div className="px-3 py-1.5 bg-slate-800/60 text-xs text-slate-500 flex items-center gap-1.5 border-t border-slate-700/50 flex-shrink-0">
           <div className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${
             activeAgent.status === 'WORKING' ? 'bg-green-400 animate-ping' : 'bg-indigo-400 animate-pulse'
           }`} />
@@ -280,7 +336,7 @@ export default function Chat({
       )}
 
       {/* Input */}
-      <div className="px-3 pb-3 pt-2 border-t border-slate-700 bg-slate-800/50">
+      <div className="px-3 pb-3 pt-2 border-t border-slate-700 bg-slate-800/50 flex-shrink-0">
         {!connected ? (
           <div className="text-center text-xs text-red-400 py-2">⚠️ Disconnected — reconnecting…</div>
         ) : (
@@ -294,7 +350,7 @@ export default function Chat({
               placeholder={
                 !configured ? 'Configure API key first…'
                 : isBusy ? `${activeAgent?.name} is busy…`
-                : 'Message… (⏎ to send, ⇧⏎ newline)'
+                : 'Message… (⏎ send, ⇧⏎ newline)'
               }
               disabled={!configured || !!isBusy}
               rows={2}

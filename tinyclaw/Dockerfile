@@ -12,6 +12,27 @@ RUN git clone --depth=1 https://github.com/TinyAGI/tinyclaw.git /app/tinyclaw
 WORKDIR /app/tinyclaw
 RUN npm install && npm run build
 
+# Patch invoke.js: pass --system-prompt from prompt_file when invoking the claude CLI.
+# tinyclaw stores prompt_file in agent config but never forwards it to the CLI;
+# this patch injects it so each agent uses its own persona instead of Claude Code defaults.
+RUN node -e " \
+const fs = require('fs'); \
+const p = 'dist/lib/invoke.js'; \
+let c = fs.readFileSync(p, 'utf8'); \
+const needle = \"claudeArgs.push('-p', message);\"; \
+const inject = \" \
+        if (agent.prompt_file && fs_1.default.existsSync(agent.prompt_file)) { \
+            const sp = fs_1.default.readFileSync(agent.prompt_file, 'utf8').trim(); \
+            claudeArgs.push('--system-prompt', sp); \
+        } \
+\"; \
+if (!c.includes('--system-prompt')) { \
+    c = c.replace(needle, inject + needle); \
+    fs.writeFileSync(p, c); \
+    console.log('invoke.js patched: --system-prompt support added'); \
+} else { console.log('invoke.js already patched'); } \
+"
+
 # Install Claude Code CLI (provides the `claude` binary used by the anthropic provider)
 RUN npm install -g @anthropic-ai/claude-code
 

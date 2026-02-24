@@ -330,7 +330,7 @@ export default function App() {
           </div>
 
           {/* Tab panels */}
-          <div className="flex-1 overflow-hidden border-x border-b border-slate-700 rounded-b-xl">
+          <div className="flex-1 min-h-0 overflow-hidden border-x border-b border-slate-700 rounded-b-xl">
             {sideTab === 'chat' && (
               <Chat
                 agents={agents}

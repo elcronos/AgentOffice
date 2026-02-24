@@ -73,6 +73,13 @@
   @apply bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-xs font-mono text-green-300 overflow-x-auto;
 }
 
+/* ── Scroll-to-bottom button ───────────────────────────────────────────────── */
+@keyframes fade-in {
+  from { opacity: 0; transform: translateX(-50%) translateY(4px); }
+  to   { opacity: 1; transform: translateX(-50%) translateY(0); }
+}
+.animate-fade-in { animation: fade-in 0.15s ease-out forwards; }
+
 /* ── Marquee/screen text ───────────────────────────────────────────────────── */
 @keyframes marquee {
   0%   { transform: translateX(100%); }
